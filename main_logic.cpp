@@ -40,16 +40,16 @@ int main(){
             }
             check_usage.push_front(inputs[i]);
             map[inputs[i]]=check_usage.begin();
-            bool placed=false;
+            // bool placed=false;
             for(int j=0;j<3;j++){
                 if(ram[j]==-1){
                     ram[j]=inputs[i];
-                    placed=true;
+                    // placed=true;
                     break;
                 }
                 if(ram[j]==victim){
                     ram[j]=inputs[i];
-                    placed=true;
+                    // placed=true;
                     break;
                 }
             }
