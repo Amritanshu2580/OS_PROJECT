@@ -1,7 +1,6 @@
-# File: app.py
 """
 Streamlit UI for the Virtual Memory Simulator.
-Updates: Rounded Graph Bars, Entrance Animation, Fixed Axis Scaling.
+Includes advanced styling for StepRenderer.
 """
 import streamlit as st
 import plotly.graph_objects as go
@@ -35,7 +34,7 @@ st.markdown("""
         font-family: 'Segoe UI', sans-serif;
         text-shadow: 0 0 10px rgba(187, 134, 252, 0.3);
     }
-    p, label, .stMarkdown, li {
+    p, label, .stMarkdown, li, .stText {
         color: #d1c4e9 !important;
     }
 
@@ -69,9 +68,9 @@ st.markdown("""
     .stButton > button {
         background: linear-gradient(90deg, #7b1fa2, #4a148c);
         color: white;
-        border-radius: 20px;
+        border-radius: 8px;
         border: none;
-        padding: 10px 24px;
+        padding: 0.5rem 1rem;
         transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(123, 31, 162, 0.4);
     }
@@ -97,6 +96,112 @@ st.markdown("""
         border: 1px solid rgba(187, 134, 252, 0.2);
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
+
+    /* --- SIMULATOR SPECIFIC CSS --- */
+    
+    /* Reference Tape */
+    .ref-tape-container {
+        overflow-x: auto;
+        padding: 15px 0;
+        margin-bottom: 10px;
+        text-align: center;
+        background: rgba(0,0,0,0.2);
+        border-radius: 10px;
+        border: 1px solid rgba(123, 31, 162, 0.3);
+    }
+    .ref-tape {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+    }
+    .ref-item {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    .ref-past {
+        color: #666;
+        background: rgba(255,255,255,0.05);
+        transform: scale(0.9);
+    }
+    .ref-current {
+        color: #fff;
+        background: #6200ea;
+        border-color: #bb86fc;
+        transform: scale(1.2);
+        box-shadow: 0 0 15px #6200ea;
+        z-index: 10;
+    }
+    .ref-future {
+        color: #444;
+        background: rgba(255,255,255,0.02);
+        transform: scale(0.8);
+    }
+
+    /* Frames Container */
+    .frames-container {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-top: 20px;
+        padding: 20px;
+    }
+    
+    /* Frame Box */
+    .frame-box {
+        width: 80px;
+        height: 100px;
+        background: linear-gradient(135deg, #2d2d3a 0%, #1e1e24 100%);
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
+        border: 2px solid #444;
+        transition: all 0.4s ease;
+        position: relative;
+    }
+    .frame-content {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #fff;
+    }
+    .frame-label {
+        font-size: 0.7rem;
+        color: #888;
+        margin-top: 5px;
+        text-transform: uppercase;
+    }
+    
+    /* States */
+    .frame-hit {
+        border-color: #00e676;
+        box-shadow: 0 0 20px rgba(0, 230, 118, 0.4);
+        transform: translateY(-5px);
+    }
+    .frame-hit .frame-content { color: #00e676; }
+    
+    .frame-fault {
+        border-color: #ff5252;
+        box-shadow: 0 0 20px rgba(255, 82, 82, 0.4);
+        animation: pulse-red 0.5s ease;
+    }
+    .frame-fault .frame-content { color: #ff5252; }
+
+    @keyframes pulse-red {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -193,7 +298,7 @@ def main():
             else:
                 pages = parser.parse_reference_string(ref_str)
                 res = ALGORITHM_MAP[algo](pages, frames)
-                st.session_state["main_renderer_cur"] = 0
+                st.session_state["vis_renderer_cur"] = 0 # Reset renderer step
                 st.session_state["vm_last_result"] = {"algo": algo, "res": res, "pages": pages}
                 st.session_state["vm_show_compare"] = False
         except Exception as e:
@@ -218,30 +323,26 @@ def main():
         st.title("📊 Algorithm Comparison")
         res = st.session_state["vm_compare_results"]
         
-        # Prepare Data
         keys = list(res.keys())
         faults = [r["faults"] for r in res.values()]
         hits = [r["hits"] for r in res.values()]
         
-        # Calculate max Y value to fix axis (Crucial for animation effect)
         max_y = max(max(faults), max(hits)) if faults else 10
         
         fig = go.Figure()
 
-        # Trace 1: Faults (with Rounded Corners)
         fig.add_trace(go.Bar(
             name="Page Faults", 
             x=keys, 
             y=faults,
-            marker=dict(color='#ff5252', cornerradius=15) # Rounded Corners
+            marker=dict(color='#ff5252', cornerradius=15)
         ))
         
-        # Trace 2: Hits (with Rounded Corners)
         fig.add_trace(go.Bar(
             name="Hits", 
             x=keys, 
             y=hits,
-            marker=dict(color='#00e676', cornerradius=15) # Rounded Corners
+            marker=dict(color='#00e676', cornerradius=15)
         ))
         
         fig.update_layout(
@@ -251,13 +352,8 @@ def main():
             barmode='group',
             xaxis_title="Algorithm",
             yaxis_title="Count",
-            # Fix Y-axis range so bars grow INTO the space
             yaxis=dict(range=[0, max_y * 1.2]),
-            # Animation Config
-            transition={
-                'duration': 1200,
-                'easing': 'cubic-out'
-            }
+            transition={'duration': 1200, 'easing': 'cubic-out'}
         )
         st.plotly_chart(fig, use_container_width=True)
         
@@ -271,20 +367,10 @@ def main():
         data = st.session_state["vm_last_result"]
         res = data["res"]
         
-        cur_idx = st.session_state.get("main_renderer_cur", 0)
-        cur_idx = min(cur_idx, len(res["steps"]) - 1)
-        step_data = res["steps"][cur_idx]
-
-        st.title(f"🟣 Simulation Results: {data['algo']}")
+        st.title(f"🟣 Simulation: {data['algo']}")
         
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Process Requests", len(data['pages']))
-        m2.metric("Page Faults", step_data["fault_count"], delta="-Faults", delta_color="inverse")
-        m3.metric("RAM Hits", step_data["hit_count"], delta="+Hits")
-
-        st.divider()
-        st.subheader("🎞️ Step-by-Step Visualization")
-        renderer = StepRenderer(key="main_renderer")
+        # Call the new renderer
+        renderer = StepRenderer(key="vis_renderer")
         renderer.render(res["steps"])
         
     else:
