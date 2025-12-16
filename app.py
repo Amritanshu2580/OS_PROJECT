@@ -1,9 +1,13 @@
 """
 Streamlit UI for the Virtual Memory Simulator.
-Includes advanced styling for StepRenderer.
+Includes:
+- Elastic Graph Animation (Slow Motion for visibility)
+- Advanced Styling
+- StepRenderer
 """
 import streamlit as st
 import plotly.graph_objects as go
+import time
 from utils import parser
 from algorithms.fifo import fifo
 from algorithms.lru import lru
@@ -99,6 +103,15 @@ st.markdown("""
 
     /* --- SIMULATOR SPECIFIC CSS --- */
     
+    /* Chart Entrance Animation (Fade Up) */
+    @keyframes slideUpFade {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .chart-entry {
+        animation: slideUpFade 0.8s ease-out forwards;
+    }
+
     /* Reference Tape */
     .ref-tape-container {
         overflow-x: auto;
@@ -262,11 +275,66 @@ def render_landing_page():
     st.markdown("<h4 style='text-align: center; color: #b39ddb;'>👈 Select your inputs in the sidebar to start!</h4>", unsafe_allow_html=True)
 
 
+def create_bar_chart(res, keys, faults, hits, max_y, is_zero_state=False):
+    """Helper to create the Plotly Figure with controlled animation."""
+    fig = go.Figure()
+
+    # If in 'zero state', we force all values to 0 to prime the animation
+    plot_faults = [0] * len(faults) if is_zero_state else faults
+    plot_hits = [0] * len(hits) if is_zero_state else hits
+    
+    # Hide text when bars are zero
+    text_pos = 'none' if is_zero_state else 'auto'
+    
+    # DURATION LOGIC:
+    # Zero State: 0ms (Instant reset)
+    # Final State: 2500ms (Slow, deliberate growth)
+    anim_duration = 0 if is_zero_state else 2500 
+
+    fig.add_trace(go.Bar(
+        name="Page Faults", 
+        x=keys, 
+        y=plot_faults,
+        text=plot_faults,
+        textposition=text_pos,
+        marker=dict(color='#ff5252', cornerradius=10)
+    ))
+    
+    fig.add_trace(go.Bar(
+        name="Hits", 
+        x=keys, 
+        y=plot_hits,
+        text=plot_hits,
+        textposition=text_pos,
+        marker=dict(color='#00e676', cornerradius=10)
+    ))
+    
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0d4fc'),
+        barmode='group',
+        xaxis_title="Algorithm",
+        yaxis_title="Count",
+        yaxis=dict(
+            range=[0, max_y], 
+            gridcolor='rgba(255,255,255,0.1)'
+        ),
+        hovermode="x",
+        # CONTROLLED TRANSITION
+        transition={'duration': anim_duration, 'easing': 'cubic-out'} 
+    )
+    return fig
+
+
 def main():
     if "vm_last_result" not in st.session_state:
         st.session_state["vm_last_result"] = None
     if "vm_show_compare" not in st.session_state:
         st.session_state["vm_show_compare"] = False
+    
+    if "anim_trigger" not in st.session_state:
+        st.session_state["anim_trigger"] = False
 
     # --- SIDEBAR INPUTS ---
     with st.sidebar:
@@ -298,7 +366,7 @@ def main():
             else:
                 pages = parser.parse_reference_string(ref_str)
                 res = ALGORITHM_MAP[algo](pages, frames)
-                st.session_state["vis_renderer_cur"] = 0 # Reset renderer step
+                st.session_state["vis_renderer_cur"] = 0
                 st.session_state["vm_last_result"] = {"algo": algo, "res": res, "pages": pages}
                 st.session_state["vm_show_compare"] = False
         except Exception as e:
@@ -315,47 +383,48 @@ def main():
                     results[k] = v(pages, frames)
                 st.session_state["vm_compare_results"] = results
                 st.session_state["vm_show_compare"] = True
+                # Set animation trigger to True
+                st.session_state["anim_trigger"] = True
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
     # --- DISPLAY ---
     if st.session_state["vm_show_compare"]:
         st.title("📊 Algorithm Comparison")
-        res = st.session_state["vm_compare_results"]
+        st.markdown('<div class="chart-entry">', unsafe_allow_html=True)
         
+        res = st.session_state["vm_compare_results"]
         keys = list(res.keys())
         faults = [r["faults"] for r in res.values()]
         hits = [r["hits"] for r in res.values()]
         
-        max_y = max(max(faults), max(hits)) if faults else 10
+        max_val = max(max(faults), max(hits)) if faults else 10
+        y_limit = max_val * 1.3
         
-        fig = go.Figure()
+        # Placeholder for the chart
+        chart_spot = st.empty()
+        
+        # --- ANIMATION LOGIC ---
+        if st.session_state["anim_trigger"]:
+            # 1. Render ZERO state (Instant snap to 0)
+            fig_zero = create_bar_chart(res, keys, faults, hits, y_limit, is_zero_state=True)
+            chart_spot.plotly_chart(fig_zero, use_container_width=True, key="vm_compare_chart")
+            
+            # 2. Wait longer for the browser to paint (0.3s)
+            time.sleep(0.3) 
+            
+            # 3. Turn off trigger
+            st.session_state["anim_trigger"] = False
+            
+            # 4. Rerun to trigger the final animation
+            st.rerun()
+            
+        else:
+            # Render FINAL state (Slow growth: 2500ms)
+            fig_final = create_bar_chart(res, keys, faults, hits, y_limit, is_zero_state=False)
+            chart_spot.plotly_chart(fig_final, use_container_width=True, key="vm_compare_chart")
 
-        fig.add_trace(go.Bar(
-            name="Page Faults", 
-            x=keys, 
-            y=faults,
-            marker=dict(color='#ff5252', cornerradius=15)
-        ))
-        
-        fig.add_trace(go.Bar(
-            name="Hits", 
-            x=keys, 
-            y=hits,
-            marker=dict(color='#00e676', cornerradius=15)
-        ))
-        
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#e0d4fc'),
-            barmode='group',
-            xaxis_title="Algorithm",
-            yaxis_title="Count",
-            yaxis=dict(range=[0, max_y * 1.2]),
-            transition={'duration': 1200, 'easing': 'cubic-out'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("### Detailed Stats")
         cols = st.columns(3)
@@ -369,7 +438,6 @@ def main():
         
         st.title(f"🟣 Simulation: {data['algo']}")
         
-        # Call the new renderer
         renderer = StepRenderer(key="vis_renderer")
         renderer.render(res["steps"])
         
