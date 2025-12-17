@@ -1,0 +1,19 @@
+streamlit==1.39.0
+pandas==2.2.2
+numpy==1.26.4
+plotly==5.24.1
+matplotlib==3.9.0
+
+# For exporting CSV/PDF or saving history
+reportlab==4.2.2
+fpdf==1.7.2
+
+# Optional but recommended
+python-dotenv==1.0.1
+
+# For testing
+pytest==8.2.1
+
+# Formatting (optional but looks professional)
+black==24.4.2
+flake8==7.1.0
